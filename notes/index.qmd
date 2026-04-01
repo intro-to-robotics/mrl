@@ -1,0 +1,28 @@
+---
+title: "Lecture Notes"
+---
+
+::: {.lecture-list}
+### Movement Primitives {.unnumbered}
+[Lecture 01: Dynamic Movement Primitives](01-dynamic-movement-primitives.qmd)<br>
+[Lecture 02: Stable Dynamical Systems](02-stable-dynamical-systems.qmd)<br>
+[Lecture 03: Motion Manifold Primitives I](03-motion-manifold-primitives-i.qmd)<br>
+[Lecture 04: Motion Manifold Primitives II](04-motion-manifold-primitives-ii.qmd)<br>
+
+### Generative Models for Robot Learning {.unnumbered}
+[Lecture 05: Brownian Motion and Wiener Process](05-brownian-motion-and-wiener-process.qmd)<br>
+[Lecture 06: Stochastic Differential Equations](06-stochastic-differential-equations.qmd)<br>
+[Lecture 07: Score-Based Generative Models](07-score-based-generative-models.qmd)<br>
+[Lecture 08: Diffusion Models and Diffusion Policy](08-diffusion-models-and-diffusion-policy.qmd)<br>
+[Lecture 09: Neural ODEs](09-neural-odes.qmd)<br>
+[Lecture 10: Flow Matching and Flow-Matching Policy](10-flow-matching-and-flow-matching-policy.qmd)<br>
+
+### Optimal Control and Reinforcement Learning {.unnumbered}
+[Lecture 11: Continuous-Time Optimal Control](11-continuous-time-optimal-control.qmd)<br>
+[Lecture 12: Hamilton--Jacobi--Bellman Equations](12-hamilton-jacobi-bellman-equations.qmd)<br>
+[Lecture 13: Discrete-Time Reinforcement Learning Foundations](13-discrete-time-reinforcement-learning-foundations.qmd)<br>
+[Lecture 14: Policy Gradient Fundamentals](14-policy-gradient-fundamentals.qmd)<br>
+[Lecture 15: REINFORCE and Variance Reduction](15-reinforce-and-variance-reduction.qmd)<br>
+[Lecture 16: Actor-Critic and Advanced Policy Optimization](16-actor-critic-and-advanced-policy-optimization.qmd)<br>
+[Lecture 17: Reinforcement Learning for Robot Control](17-reinforcement-learning-for-robot-control.qmd)<br>
+:::

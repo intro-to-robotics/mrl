@@ -1,0 +1,40 @@
+---
+title: "Lecture 15: REINFORCE and Variance Reduction"
+---
+
+## Learning Objectives
+
+- TODO:
+- TODO:
+- TODO:
+
+## Key Ideas
+
+- TODO:
+
+## Mathematical Details
+
+- TODO:
+- Key equation(s):
+
+$$
+\text{TODO}
+$$
+
+## Algorithm / Procedure
+
+1. TODO
+2. TODO
+3. TODO
+
+## Implementation Notes
+
+- TODO:
+
+## Questions
+
+- TODO:
+
+## References
+
+- TODO:
