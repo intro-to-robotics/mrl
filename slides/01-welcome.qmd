@@ -11,7 +11,7 @@ format:
 
 - **Website**: [https://intro-to-robotics.github.io/mrl/](https://intro-to-robotics.github.io/mrl/)
 - Speak up and participate! Please interrupt me at anytime.
-- Remember, if you do not understand something, there is a 90% chance it is my fault for not being clear, so please ask questions.
+- If something is unclear, please ask. I may not have explained it clearly enough, and others may be wondering the same thing.
 
 ## Course Organizations
 
