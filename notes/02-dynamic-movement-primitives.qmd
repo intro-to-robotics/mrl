@@ -1,7 +1,791 @@
 ---
 title: "Lecture 02: Dynamic Movement Primitives"
+execute:
+  enabled: false
 ---
 
-## Overview
+Let $\mathcal{Q} = \mathbb{R}^{n}$ denote the configuration space.
+The simplest representation of robot motion (trajectory) data we can collect is a sequence of time-configuration pairs:
+\begin{equation}
+\big((t_1, q_1), (t_2, q_2), \ldots, (t_N, q_N)\big),
+\end{equation}
+where $t_i \in [0, T]$ denotes the time variable -- where $0=t_1 < t_2 < \cdots < t_N=T$ with the terminal time $T$ 
+-- and $q_i \in \mathcal{Q}$ is an $n$-dimensional vector.
 
-TBD.
+Given a single trajectory, the simplest robot learning problem
+is to learn a policy that maps the clock variable $t$ to an action so that 
+the robot can reproduce the demonstrated trajectory.
+We consider desired position, velocity, and acceleration
+as actions, denoted by
+$a = (q_{\mathrm{des}}, \dot{q}_{\mathrm{des}}, \ddot{q}_{\mathrm{des}})$.
+Then, a low-level controller, e.g., computed torque control, tracks this command.
+
+We require the policy to satisfy two criteria.
+First, it should drive the robot to the goal point
+$g := q_N$ (i.e., the terminal point of the demonstrated trajectory)
+as $t \to \infty$.
+Second, it should allow slight modulation of the goal point
+while preserving the overall shape of the trajectory.
+
+Dynamic Movement Primitives (DMP), inspired by the motor control of
+biological systems, have elegant formulation, guarantee convergence 
+to a given target, are sufficiently flexible to create complex behaviors, 
+and can be learned from data using efficient algorithms.
+
+At $t = 0$, initialize the desired state as
+\begin{equation}
+\big(q_{\mathrm{des}}(0), \dot{q}_{\mathrm{des}}(0), \ddot{q}_{\mathrm{des}}(0)\big) = \big(q_1, 0, 0\big),
+\end{equation}
+and a continuous-time DMP can be written as:
+\begin{equation}
+\ddot{q}_{\mathrm{des}}(t) = K\big(g - q_{\mathrm{des}}(t)\big) - D \dot{q}_{\mathrm{des}}(t) + f(t;\theta),
+\end{equation}
+where $K, D \in \mathbb{R}^{n \times n}$ are positive-definite stiffness and damping gain matrices.
+The function $f(t;{\theta}) \in \mathbb{R}^{n}$ is parameterized by $\theta \in \Theta$.
+This parametric forcing term modulates the trajectory shape beyond linear
+mass-spring-damper dynamics.
+
+The forcing term can be defined as a normalized weighted sum of
+$N$ radial basis functions (RBFs):
+\begin{align}
+    f(t;\theta) &= \left(\frac{\sum_{i=1}^{N} \theta_i \psi_i(s)}{\sum_{i=1}^{N} \psi_i(s)}\right)s, \\
+    \psi_i(s) &= \exp\!\left(-\frac{(s - c_i)^2}{\delta^2}\right), \\
+    s(t) &= \max\!\left(1 - \frac{t}{T}, 0\right).
+\end{align}
+Here, $s$ is a phase variable that starts at $1$, decreases to $0$,
+and then remains at $0$. Each $\theta_i \in \mathbb{R}^{n}$ is a learnable
+weight vector, and each $\psi_i(s) \in \mathbb{R}$ is a scalar basis function.
+The basis centers are typically chosen as $c_i = \frac{i-1}{N-1}$ with
+a shared width $\delta = \frac{1}{N-1}$.
+
+Using a forward-Euler discretization with time step $h$ and
+$t_k = kh$, the desired state is updated at each step $k$ as:
+
+\begin{align}
+    \ddot{q}_{\mathrm{des}}^{k} &= K\big(g - q_{\mathrm{des}}^{k}\big) - D\dot{q}_{\mathrm{des}}^{k} + f(t_k; \theta), \\
+    \dot{q}_{\mathrm{des}}^{k+1} &= \dot{q}_{\mathrm{des}}^{k} + h\,\ddot{q}_{\mathrm{des}}^{k}, \\
+    q_{\mathrm{des}}^{k+1} &= q_{\mathrm{des}}^{k} + h\,\dot{q}_{\mathrm{des}}^{k}.
+\end{align}
+
+::: {#exm-random-theta name="2D DMP Example with Random $\theta$"}
+<br>
+Consider a 2D DMP ($q \in \mathbb{R}^{2}$) with
+$q_1 = [-0.8, -0.6]^\top$, $g = [1.0, 0.8]^\top$, 
+$K = 80I$, $D = 18I$, $T = 2.0$, and $h = 0.01$.
+Let $N = 30$ and sample a random parameter matrix
+$\theta = [\theta_1, \ldots, \theta_N] \in \mathbb{R}^{2 \times N}$.
+
+```{python}
+#| code-fold: true
+#| code-summary: "Show Python code"
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation, PillowWriter
+from pathlib import Path
+import subprocess
+rng = np.random.default_rng(7)
+
+# DMP setup (2D particle)
+T = 2.0
+h = 0.01
+t = np.arange(0.0, T + h, h)
+K = np.diag([80.0, 80.0])
+D = np.diag([18.0, 18.0])
+q0 = np.array([-0.8, -0.6])
+g = np.array([1.0, 0.8])
+N = 30
+
+# Phase variable and RBF dictionary
+s = np.maximum(1.0 - t / T, 0.0)
+c = np.linspace(0.0, 1.0, N)
+delta = 1.0 / (N - 1)
+
+# Random parameter matrix theta in R^{2 x N}
+theta = rng.normal(loc=0.0, scale=50.0, size=(2, N))
+psi = np.exp(-((s[:, None] - c[None, :]) ** 2) / (delta**2))
+weights = psi / (psi.sum(axis=1, keepdims=True) + 1e-12)
+f = (weights @ theta.T) * s[:, None]
+
+# Discrete-time DMP rollout (2D)
+q = np.zeros((len(t), 2))
+qd = np.zeros((len(t), 2))
+qdd = np.zeros((len(t), 2))
+q[0] = q0
+
+for k in range(len(t) - 1):
+    qdd[k] = K @ (g - q[k]) - D @ qd[k] + f[k]
+    qd[k + 1] = qd[k] + h * qdd[k]
+    q[k + 1] = q[k] + h * qd[k]
+qdd[-1] = K @ (g - q[-1]) - D @ qd[-1] + f[-1]
+
+# Build a single (1,2) figure/GIF
+fig, axes = plt.subplots(1, 2, figsize=(11, 5), constrained_layout=True)
+
+# Left: full trajectory overview
+axes[0].plot(q[:, 0], q[:, 1], color="tab:blue", linewidth=2.5, label="q_des(t)")
+axes[0].scatter(q0[0], q0[1], color="black", s=40, label="start")
+axes[0].scatter(g[0], g[1], color="crimson", s=80, marker="*", label="goal")
+axes[0].set_title("Trajectory Overview")
+axes[0].set_xlabel(r"$q_1$")
+axes[0].set_ylabel(r"$q_2$")
+axes[0].set_aspect("equal", adjustable="box")
+axes[0].grid(alpha=0.3)
+axes[0].legend(loc="best")
+
+# Right: animated convergence
+axes[1].plot(q[:, 0], q[:, 1], color="lightgray", linewidth=2.0, linestyle="--")
+axes[1].scatter(g[0], g[1], color="crimson", s=80, marker="*", label="goal")
+traj_line, = axes[1].plot([], [], color="tab:blue", linewidth=2.2, label="trajectory")
+particle, = axes[1].plot([], [], "o", color="tab:orange", markersize=7, label="particle")
+axes[1].set_title("Converging Particle")
+axes[1].set_xlabel(r"$q_1$")
+axes[1].set_ylabel(r"$q_2$")
+axes[1].set_aspect("equal", adjustable="box")
+axes[1].grid(alpha=0.3)
+axes[1].legend(loc="best")
+
+pad = 0.2
+xlim = (min(q[:, 0].min(), g[0]) - pad, max(q[:, 0].max(), g[0]) + pad)
+ylim = (min(q[:, 1].min(), g[1]) - pad, max(q[:, 1].max(), g[1]) + pad)
+for ax in axes:
+    ax.set_xlim(*xlim)
+    ax.set_ylim(*ylim)
+
+def update(frame_idx):
+    traj_line.set_data(q[: frame_idx + 1, 0], q[: frame_idx + 1, 1])
+    particle.set_data([q[frame_idx, 0]], [q[frame_idx, 1]])
+    return traj_line, particle
+
+ani = FuncAnimation(fig, update, frames=len(t), interval=25, blit=True)
+
+cwd = Path.cwd()
+if (cwd / "notes").exists():
+    media_dir = cwd / "notes" / "imgs" / "02-dynamic-movement-primitives"
+else:
+    media_dir = cwd / "imgs" / "02-dynamic-movement-primitives"
+media_dir.mkdir(parents=True, exist_ok=True)
+webm_path = media_dir / "dmp_2d_particle.webm"
+tmp_gif_path = media_dir / "_tmp_dmp_2d_particle.gif"
+
+# Save temporary GIF, then convert to WebM for smaller output files
+ani.save(str(tmp_gif_path), writer=PillowWriter(fps=30))
+subprocess.run(
+    [
+        "ffmpeg", "-y",
+        "-i", str(tmp_gif_path),
+        "-c:v", "libvpx-vp9",
+        "-b:v", "0",
+        "-crf", "36",
+        "-an",
+        str(webm_path),
+    ],
+    check=True,
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL,
+)
+tmp_gif_path.unlink(missing_ok=True)
+plt.close(fig)
+# print(f"Saved WebM: {webm_path}")
+```
+<video src="imgs/02-dynamic-movement-primitives/dmp_2d_particle.webm" controls autoplay loop muted playsinline style="width:80%"></video>
+
+Even with random $\theta$, the 2D particle converges to the goal,
+while the forcing term changes the transient path shape.
+
+:::
+
+Now, we consider how to learn $\theta$ from the demonstrated trajectory
+$\big((t_i, q_i)\big)_{i=1}^{M}$.
+Given the observed positions, we first estimate $\dot{q}_i$ and $\ddot{q}_i$
+(e.g., via finite differences), and then fit $\theta$ so that the DMP dynamics
+reconstruct these accelerations along the demonstration.
+
+For each sample $i$, define the target forcing term and feature vector as
+\begin{align}
+f_i^{\star} &= \ddot{q}_i - K(g - q_i) + D\dot{q}_i, \\
+\phi_i &= s_i
+\begin{bmatrix}
+\dfrac{\psi_1(s_i)}{\sum_{j=1}^{N}\psi_j(s_i)} \\
+\vdots \\
+\dfrac{\psi_N(s_i)}{\sum_{j=1}^{N}\psi_j(s_i)}
+\end{bmatrix}
+\in \mathbb{R}^{N}.
+\end{align}
+Then the regression model is
+\begin{equation}
+f_i^{\star} \approx \theta \phi_i, \qquad \theta \in \mathbb{R}^{n \times N}.
+\end{equation}
+Stacking data as
+$F^{\star} = [f_1^{\star}, \ldots, f_M^{\star}] \in \mathbb{R}^{n \times M}$
+and
+$\Phi = [\phi_1, \ldots, \phi_M] \in \mathbb{R}^{N \times M}$,
+we obtain the ridge-regression solution
+\begin{equation}
+\theta^{\star} = F^{\star}\Phi^{\top}\big(\Phi\Phi^{\top} + \lambda I\big)^{-1},
+\end{equation}
+where $\lambda \ge 0$ is a regularization coefficient.
+
+
+::: {#exm-ridge-regression name="2D DMP Fit to an S-shaped Demonstration"}
+<br>
+We now fit $\theta$ from a synthetic 2D demonstration and visualize the results.
+
+```{python}
+#| code-fold: true
+#| code-summary: "Show Python code"
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation, PillowWriter
+from pathlib import Path
+import subprocess
+
+# 1) Synthetic S-shaped demonstration in R^2
+T = 2.0
+h = 0.01
+t = np.arange(0.0, T + h, h)
+M = len(t)
+
+tau = t / T
+x_demo = -1.0 + 2.0 * tau
+base_s = x_demo**5 - x_demo
+wiggle = np.sin(4.0 * np.pi * tau) * (1.0 - (2.0 * tau - 1.0) ** 2)
+y_demo = 1.6 * base_s + 0.25 * wiggle
+q_demo = np.column_stack([x_demo, y_demo])
+
+# Numerical derivatives from demonstration
+qd_demo = np.gradient(q_demo, h, axis=0)
+qdd_demo = np.gradient(qd_demo, h, axis=0)
+
+# 2) DMP basis features
+N = 35
+s = np.maximum(1.0 - t / T, 0.0)
+c = np.linspace(0.0, 1.0, N)
+delta = 1.0 / (N - 1)
+
+psi = np.exp(-((s[:, None] - c[None, :]) ** 2) / (delta**2))
+Phi = (psi / (psi.sum(axis=1, keepdims=True) + 1e-12)) * s[:, None]  # M x N
+
+# 3) Ridge regression for theta
+K = np.diag([100.0, 100.0])
+D = np.diag([20.0, 20.0])
+g = q_demo[-1]
+
+f_target = qdd_demo - (K @ (g - q_demo).T).T + (D @ qd_demo.T).T  # M x 2
+
+lam = 1e-4
+A = Phi.T @ Phi + lam * np.eye(N)  # N x N
+theta_T = np.linalg.solve(A, Phi.T @ f_target)  # N x 2
+theta = theta_T.T  # 2 x N
+
+# 4) Rollout fitted DMP trajectory
+q_fit = np.zeros_like(q_demo)
+qd_fit = np.zeros_like(q_demo)
+f_all = np.zeros_like(q_demo)
+q_fit[0] = q_demo[0]
+
+for k in range(M - 1):
+    f_hat = theta @ Phi[k]  # R^2
+    f_all[k] = f_hat
+    qdd = K @ (g - q_fit[k]) - D @ qd_fit[k] + f_hat
+    qd_fit[k + 1] = qd_fit[k] + h * qdd
+    q_fit[k + 1] = q_fit[k] + h * qd_fit[k]
+f_all[-1] = theta @ Phi[-1]
+
+# 5) Build a single (2,3) animated figure
+fig, axes = plt.subplots(2, 3, figsize=(14, 8), constrained_layout=True)
+
+# (1,1) S-curve demonstration
+axes[0, 0].plot(q_demo[:, 0], q_demo[:, 1], color="black", linewidth=2.5)
+axes[0, 0].set_title("Demonstration (S-curve)")
+axes[0, 0].set_xlabel(r"$q_1$")
+axes[0, 0].set_ylabel(r"$q_2$")
+axes[0, 0].set_aspect("equal", adjustable="box")
+axes[0, 0].grid(alpha=0.3)
+
+# (1,2) fitted result
+axes[0, 1].plot(q_demo[:, 0], q_demo[:, 1], "--", color="gray", linewidth=2, label="demo")
+axes[0, 1].plot(q_fit[:, 0], q_fit[:, 1], color="tab:blue", linewidth=2.5, label="fitted DMP")
+axes[0, 1].scatter(g[0], g[1], color="crimson", marker="*", s=80, label="goal")
+axes[0, 1].set_title("Fitted Result")
+axes[0, 1].set_xlabel(r"$q_1$")
+axes[0, 1].set_ylabel(r"$q_2$")
+axes[0, 1].set_aspect("equal", adjustable="box")
+axes[0, 1].grid(alpha=0.3)
+axes[0, 1].legend(loc="best")
+
+# (1,3) animated convergence
+axes[0, 2].plot(q_fit[:, 0], q_fit[:, 1], color="lightgray", linewidth=2, linestyle="--")
+axes[0, 2].scatter(g[0], g[1], color="crimson", marker="*", s=80, label="goal")
+traj_line, = axes[0, 2].plot([], [], color="tab:blue", linewidth=2.2, label="trajectory")
+particle, = axes[0, 2].plot([], [], "o", color="tab:orange", markersize=7, label="particle")
+axes[0, 2].set_title("Converging Particle (GIF)")
+axes[0, 2].set_xlabel(r"$q_1$")
+axes[0, 2].set_ylabel(r"$q_2$")
+axes[0, 2].set_aspect("equal", adjustable="box")
+axes[0, 2].grid(alpha=0.3)
+axes[0, 2].legend(loc="best")
+
+# (2,1) phase and normalized force magnitude over time
+f_norm = np.linalg.norm(f_all, axis=1)
+f_norm_n = f_norm / (f_norm.max() + 1e-12)
+axes[1, 0].plot(t, s, color="tab:green", linewidth=2, label="phase $s$")
+axes[1, 0].plot(t, f_norm_n, color="tab:red", linewidth=2, label=r"normalized $\|f\|$")
+phase_marker, = axes[1, 0].plot([], [], "o", color="tab:green", markersize=5)
+force_marker, = axes[1, 0].plot([], [], "o", color="tab:red", markersize=5)
+axes[1, 0].set_title("Phase and Force Magnitude")
+axes[1, 0].set_xlabel("time $t$")
+axes[1, 0].set_ylim(-0.05, 1.1)
+axes[1, 0].grid(alpha=0.3)
+axes[1, 0].legend(loc="best")
+
+# (2,2) linear path + force arrows
+alpha = np.linspace(0.0, 1.0, M)
+q_lin = q_demo[0] + alpha[:, None] * (g - q_demo[0])
+axes[1, 1].plot(q_lin[:, 0], q_lin[:, 1], "--", color="gray", linewidth=2, label="linear path")
+axes[1, 1].scatter(q_demo[0, 0], q_demo[0, 1], color="black", s=35, label="start")
+axes[1, 1].scatter(g[0], g[1], color="crimson", marker="*", s=80, label="goal")
+idx_arrow = np.linspace(0, M - 1, 16, dtype=int)
+pts = q_lin[idx_arrow]
+u = f_all[idx_arrow, 0]
+v = f_all[idx_arrow, 1]
+mag = np.sqrt(u**2 + v**2) + 1e-12
+arrow_scale = 0.12
+u_plot = (u / mag) * arrow_scale
+v_plot = (v / mag) * arrow_scale
+axes[1, 1].quiver(
+    pts[:, 0], pts[:, 1], u_plot, v_plot,
+    angles="xy", scale_units="xy", scale=1,
+    color="tab:red", width=0.006, alpha=0.85, label="force direction"
+)
+axes[1, 1].set_title("Linear Path + Force Arrows")
+axes[1, 1].set_xlabel(r"$q_1$")
+axes[1, 1].set_ylabel(r"$q_2$")
+axes[1, 1].set_aspect("equal", adjustable="box")
+axes[1, 1].grid(alpha=0.3)
+axes[1, 1].legend(loc="best")
+
+# (2,3) fitted coordinates over time
+axes[1, 2].plot(t, q_fit[:, 0], color="tab:blue", linewidth=2, label=r"$q_1(t)$")
+axes[1, 2].plot(t, q_fit[:, 1], color="tab:orange", linewidth=2, label=r"$q_2(t)$")
+q1_marker, = axes[1, 2].plot([], [], "o", color="tab:blue", markersize=5)
+q2_marker, = axes[1, 2].plot([], [], "o", color="tab:orange", markersize=5)
+axes[1, 2].set_title("Fitted Coordinates vs Time")
+axes[1, 2].set_xlabel("time $t$")
+axes[1, 2].grid(alpha=0.3)
+axes[1, 2].legend(loc="best")
+
+# Consistent limits for position-space plots
+all_x = np.concatenate([q_demo[:, 0], q_fit[:, 0], q_lin[:, 0], [g[0]]])
+all_y = np.concatenate([q_demo[:, 1], q_fit[:, 1], q_lin[:, 1], [g[1]]])
+pad = 0.15
+xlim = (all_x.min() - pad, all_x.max() + pad)
+ylim = (all_y.min() - pad, all_y.max() + pad)
+for ax in [axes[0, 0], axes[0, 1], axes[0, 2], axes[1, 1]]:
+    ax.set_xlim(*xlim)
+    ax.set_ylim(*ylim)
+
+def update(frame_idx):
+    traj_line.set_data(q_fit[: frame_idx + 1, 0], q_fit[: frame_idx + 1, 1])
+    particle.set_data([q_fit[frame_idx, 0]], [q_fit[frame_idx, 1]])
+    phase_marker.set_data([t[frame_idx]], [s[frame_idx]])
+    force_marker.set_data([t[frame_idx]], [f_norm_n[frame_idx]])
+    q1_marker.set_data([t[frame_idx]], [q_fit[frame_idx, 0]])
+    q2_marker.set_data([t[frame_idx]], [q_fit[frame_idx, 1]])
+    return traj_line, particle, phase_marker, force_marker, q1_marker, q2_marker
+
+ani = FuncAnimation(fig, update, frames=M, interval=20, blit=False)
+
+cwd = Path.cwd()
+if (cwd / "notes").exists():
+    media_dir = cwd / "notes" / "imgs" / "02-dynamic-movement-primitives"
+else:
+    media_dir = cwd / "imgs" / "02-dynamic-movement-primitives"
+media_dir.mkdir(parents=True, exist_ok=True)
+webm_path = media_dir / "dmp_2d_fit_2x3.webm"
+tmp_gif_path = media_dir / "_tmp_dmp_2d_fit_2x3.gif"
+
+# Save temporary GIF, then convert to WebM for smaller output files
+ani.save(str(tmp_gif_path), writer=PillowWriter(fps=30))
+subprocess.run(
+    [
+        "ffmpeg", "-y",
+        "-i", str(tmp_gif_path),
+        "-c:v", "libvpx-vp9",
+        "-b:v", "0",
+        "-crf", "36",
+        "-an",
+        str(webm_path),
+    ],
+    check=True,
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL,
+)
+tmp_gif_path.unlink(missing_ok=True)
+plt.close(fig)
+
+# print(f"Saved WebM: {webm_path}")
+```
+
+<video src="imgs/02-dynamic-movement-primitives/dmp_2d_fit_2x3.webm" controls autoplay loop muted playsinline style="width:100%"></video>
+:::
+
+
+The DMP allows us to modulate the goal position while keeping the overall trajectory shape, 
+as shown in the below example:
+
+:::: {#exm-goal-modulation name="Goal Modulation with a Learned DMP"}
+```{python}
+#| code-fold: true
+#| code-summary: "Show Python code"
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation, PillowWriter
+from pathlib import Path
+import subprocess
+
+# 1) Build a demonstration and learn theta once
+T = 2.0
+h = 0.01
+t = np.arange(0.0, T + h, h)
+M = len(t)
+
+tau = t / T
+x_demo = -1.0 + 2.0 * tau
+base_s = x_demo**5 - x_demo
+wiggle = np.sin(4.0 * np.pi * tau) * (1.0 - (2.0 * tau - 1.0) ** 2)
+y_demo = 1.6 * base_s + 0.25 * wiggle
+q_demo = np.column_stack([x_demo, y_demo])
+
+qd_demo = np.gradient(q_demo, h, axis=0)
+qdd_demo = np.gradient(qd_demo, h, axis=0)
+
+N = 35
+s = np.maximum(1.0 - t / T, 0.0)
+c = np.linspace(0.0, 1.0, N)
+delta = 1.0 / (N - 1)
+psi = np.exp(-((s[:, None] - c[None, :]) ** 2) / (delta**2))
+Phi = (psi / (psi.sum(axis=1, keepdims=True) + 1e-12)) * s[:, None]  # M x N
+
+K = np.diag([100.0, 100.0])
+D = np.diag([20.0, 20.0])
+g0 = q_demo[-1]
+f_target = qdd_demo - (K @ (g0 - q_demo).T).T + (D @ qd_demo.T).T  # M x 2
+
+lam = 1e-4
+A = Phi.T @ Phi + lam * np.eye(N)
+theta = np.linalg.solve(A, Phi.T @ f_target).T  # 2 x N
+
+# 2) Rollout function for a given goal
+def rollout(goal):
+    q = np.zeros((M, 2))
+    qd = np.zeros((M, 2))
+    q[0] = q_demo[0]
+    for k in range(M - 1):
+        f_hat = theta @ Phi[k]
+        qdd = K @ (goal - q[k]) - D @ qd[k] + f_hat
+        qd[k + 1] = qd[k] + h * qdd
+        q[k + 1] = q[k] + h * qd[k]
+    return q
+
+# 3) Original + three goal changes
+goals = [
+    ("Original Goal", g0),
+    ("Goal Change 1", g0 + np.array([0.35, 0.00])),
+    ("Goal Change 2", g0 + np.array([0.00, -0.35])),
+    ("Goal Change 3", g0 + np.array([0.30, 0.25])),
+]
+trajs = [rollout(g) for _, g in goals]
+
+# 4) Build a (1,4) animated figure
+fig, axes = plt.subplots(1, 4, figsize=(16, 4.2), constrained_layout=True)
+
+all_x = np.concatenate([q_demo[:, 0]] + [q[:, 0] for q in trajs] + [np.array([g[0] for _, g in goals])])
+all_y = np.concatenate([q_demo[:, 1]] + [q[:, 1] for q in trajs] + [np.array([g[1] for _, g in goals])])
+pad = 0.18
+xlim = (all_x.min() - pad, all_x.max() + pad)
+ylim = (all_y.min() - pad, all_y.max() + pad)
+
+traj_lines = []
+particles = []
+for idx, ((title, goal), q_roll) in enumerate(zip(goals, trajs)):
+    ax = axes[idx]
+    ax.plot(q_demo[:, 0], q_demo[:, 1], "--", color="gray", linewidth=1.8, label="demo shape")
+    ax.scatter(q_demo[0, 0], q_demo[0, 1], color="black", s=28, label="start")
+    ax.scatter(goal[0], goal[1], color="crimson", marker="*", s=70, label="goal")
+    line, = ax.plot([], [], color="tab:blue", linewidth=2.2, label="DMP rollout")
+    pt, = ax.plot([], [], "o", color="tab:orange", markersize=6)
+    traj_lines.append(line)
+    particles.append(pt)
+    ax.set_title(title)
+    ax.set_xlabel(r"$q_1$")
+    if idx == 0:
+        ax.set_ylabel(r"$q_2$")
+    ax.set_aspect("equal", adjustable="box")
+    ax.set_xlim(*xlim)
+    ax.set_ylim(*ylim)
+    ax.grid(alpha=0.3)
+    if idx == 0:
+        ax.legend(loc="best", fontsize=8)
+
+def update(frame_idx):
+    artists = []
+    for j in range(4):
+        q_roll = trajs[j]
+        traj_lines[j].set_data(q_roll[: frame_idx + 1, 0], q_roll[: frame_idx + 1, 1])
+        particles[j].set_data([q_roll[frame_idx, 0]], [q_roll[frame_idx, 1]])
+        artists.extend([traj_lines[j], particles[j]])
+    return artists
+
+ani = FuncAnimation(fig, update, frames=M, interval=25, blit=False)
+
+# 5) Save as WebM (via temporary GIF conversion)
+cwd = Path.cwd()
+if (cwd / "notes").exists():
+    media_dir = cwd / "notes" / "imgs" / "02-dynamic-movement-primitives"
+else:
+    media_dir = cwd / "imgs" / "02-dynamic-movement-primitives"
+media_dir.mkdir(parents=True, exist_ok=True)
+webm_path = media_dir / "dmp_goal_modulation_1x4.webm"
+tmp_gif_path = media_dir / "_tmp_dmp_goal_modulation_1x4.gif"
+
+ani.save(str(tmp_gif_path), writer=PillowWriter(fps=30))
+subprocess.run(
+    [
+        "ffmpeg", "-y",
+        "-i", str(tmp_gif_path),
+        "-c:v", "libvpx-vp9",
+        "-b:v", "0",
+        "-crf", "36",
+        "-an",
+        str(webm_path),
+    ],
+    check=True,
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL,
+)
+tmp_gif_path.unlink(missing_ok=True)
+plt.close(fig)
+```
+
+<video src="imgs/02-dynamic-movement-primitives/dmp_goal_modulation_1x4.webm" controls autoplay loop muted playsinline style="width:100%"></video>
+::::
+
+Recall that this policy takes only the clock variable $t$ as input.
+That is, it has no sensory-feedback input.
+As a result, it is not robust to external disturbances: if the robot is pushed far away
+from the demonstrated trajectory, or if a temporal perturbation occurs
+(e.g., the robot is held still while time continues to flow),
+the desired state still advances and converges according to the internal clock.
+
+An alternative way to use a learned DMP model is to define the acceleration command
+directly from sensory feedback:
+\begin{equation}
+    \ddot{q}_{\mathrm{des}} = K(g - q) - D\dot{q} + f(t; \theta),
+\end{equation}
+where $(q,\dot{q})$ is the proprioceptive state. 
+This is still not fully robust to temporal disturbances because
+$f$ remains time-dependent.
+However, it typically leads to less dangerous behavior under
+a high-stiffness low-level position controller.
+See the example below:
+
+:::: {#exm-perturbation-comparison name="Clock-Only vs Feedback DMP Under Large Perturbation"}
+```{python}
+#| code-fold: true
+#| code-summary: "Show Python code"
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation, PillowWriter
+from pathlib import Path
+import subprocess
+
+# 1) Build a demonstration and learn theta
+T = 2.0
+h = 0.005
+t = np.arange(0.0, T + h, h)
+M = len(t)
+
+tau = t / T
+x_demo = -1.0 + 2.0 * tau
+base_s = x_demo**5 - x_demo
+wiggle = np.sin(4.0 * np.pi * tau) * (1.0 - (2.0 * tau - 1.0) ** 2)
+y_demo = 1.6 * base_s + 0.25 * wiggle
+q_demo = np.column_stack([x_demo, y_demo])
+
+qd_demo = np.gradient(q_demo, h, axis=0)
+qdd_demo = np.gradient(qd_demo, h, axis=0)
+
+N = 35
+s = np.maximum(1.0 - t / T, 0.0)
+c = np.linspace(0.0, 1.0, N)
+delta = 1.0 / (N - 1)
+psi = np.exp(-((s[:, None] - c[None, :]) ** 2) / (delta**2))
+Phi = (psi / (psi.sum(axis=1, keepdims=True) + 1e-12)) * s[:, None]  # M x N
+
+K_dmp = np.diag([100.0, 100.0])
+D_dmp = np.diag([20.0, 20.0])
+g = q_demo[-1]
+
+f_target = qdd_demo - (K_dmp @ (g - q_demo).T).T + (D_dmp @ qd_demo.T).T
+lam = 1e-4
+A = Phi.T @ Phi + lam * np.eye(N)
+theta = np.linalg.solve(A, Phi.T @ f_target).T  # 2 x N
+
+# 2) Two policy variants with the same low-level high-stiffness PD controller
+Kp_ll = np.diag([450.0, 450.0])
+Kd_ll = np.diag([60.0, 60.0])
+
+t_push_start = 0.80
+t_push_end = 1.20
+push = np.array([500.0, -200.0])  # large external perturbation
+
+def simulate(mode):
+    q_act = np.zeros((M, 2))
+    qd_act = np.zeros((M, 2))
+    q_des = np.zeros((M, 2))
+    qd_des = np.zeros((M, 2))
+    qdd_des = np.zeros((M, 2))
+
+    q_act[0] = q_demo[0]
+    q_des[0] = q_demo[0]
+
+    for k in range(M - 1):
+        f_hat = theta @ Phi[k]
+
+        if mode == "clock_only":
+            # Open-loop desired dynamics driven only by internal clock t
+            qdd_des[k] = K_dmp @ (g - q_des[k]) - D_dmp @ qd_des[k] + f_hat
+        elif mode == "feedback":
+            # Desired acceleration is computed from actual proprioceptive state
+            qdd_des[k] = K_dmp @ (g - q_act[k]) - D_dmp @ qd_act[k] + f_hat
+        else:
+            raise ValueError("Unknown mode.")
+
+        qd_des[k + 1] = qd_des[k] + h * qdd_des[k]
+        q_des[k + 1] = q_des[k] + h * qd_des[k]
+
+        disturbance = push if (t_push_start <= t[k] <= t_push_end) else np.zeros(2)
+        qdd_act = Kp_ll @ (q_des[k] - q_act[k]) + Kd_ll @ (qd_des[k] - qd_act[k]) + disturbance
+
+        qd_act[k + 1] = qd_act[k] + h * qdd_act
+        q_act[k + 1] = q_act[k] + h * qd_act[k]
+
+    return q_act, q_des
+
+q_act_clock, q_des_clock = simulate("clock_only")
+q_act_feedback, q_des_feedback = simulate("feedback")
+
+# 3) Build a (2,2) figure:
+# (1,1), (1,2): static comparisons
+# (2,1), (2,2): corresponding animated rollouts
+p0 = np.argmin(np.abs(t - t_push_start))
+p1 = np.argmin(np.abs(t - t_push_end))
+
+all_x = np.concatenate([
+    q_demo[:, 0], q_act_clock[:, 0], q_des_clock[:, 0],
+    q_act_feedback[:, 0], q_des_feedback[:, 0],
+])
+all_y = np.concatenate([
+    q_demo[:, 1], q_act_clock[:, 1], q_des_clock[:, 1],
+    q_act_feedback[:, 1], q_des_feedback[:, 1],
+])
+pad = 0.2
+xlim = (all_x.min() - pad, all_x.max() + pad)
+ylim = (all_y.min() - pad, all_y.max() + pad)
+
+fig, axes = plt.subplots(2, 2, figsize=(12, 9), constrained_layout=True)
+
+# (1,1) Static: clock-only
+axes[0, 0].plot(q_des_clock[:, 0], q_des_clock[:, 1], "--", color="gray", linewidth=2, label="desired")
+axes[0, 0].plot(q_act_clock[:, 0], q_act_clock[:, 1], color="tab:blue", linewidth=2.5, label="actual")
+axes[0, 0].scatter(q_demo[0, 0], q_demo[0, 1], color="black", s=35, label="start")
+axes[0, 0].scatter(g[0], g[1], color="crimson", marker="*", s=80, label="goal")
+axes[0, 0].scatter(q_act_clock[p0, 0], q_act_clock[p0, 1], color="tab:red", marker="x", s=70, label="perturb. start")
+axes[0, 0].scatter(q_act_clock[p1, 0], q_act_clock[p1, 1], color="tab:purple", marker="x", s=70, label="perturb. end")
+axes[0, 0].set_title("(1,1) Clock-Only (Static)")
+axes[0, 0].legend(loc="best", fontsize=8)
+
+# (1,2) Static: feedback
+axes[0, 1].plot(q_des_feedback[:, 0], q_des_feedback[:, 1], "--", color="gray", linewidth=2, label="desired")
+axes[0, 1].plot(q_act_feedback[:, 0], q_act_feedback[:, 1], color="tab:blue", linewidth=2.5, label="actual")
+axes[0, 1].scatter(q_demo[0, 0], q_demo[0, 1], color="black", s=35, label="start")
+axes[0, 1].scatter(g[0], g[1], color="crimson", marker="*", s=80, label="goal")
+axes[0, 1].scatter(q_act_feedback[p0, 0], q_act_feedback[p0, 1], color="tab:red", marker="x", s=70, label="perturb. start")
+axes[0, 1].scatter(q_act_feedback[p1, 0], q_act_feedback[p1, 1], color="tab:purple", marker="x", s=70, label="perturb. end")
+axes[0, 1].set_title("(1,2) Feedback (Static)")
+axes[0, 1].legend(loc="best", fontsize=8)
+
+# (2,1) Animated: clock-only
+axes[1, 0].plot(q_des_clock[:, 0], q_des_clock[:, 1], "--", color="gray", linewidth=2, label="desired")
+traj_clock, = axes[1, 0].plot([], [], color="tab:blue", linewidth=2.5, label="actual")
+particle_clock, = axes[1, 0].plot([], [], "o", color="tab:orange", markersize=6)
+axes[1, 0].scatter(g[0], g[1], color="crimson", marker="*", s=80, label="goal")
+axes[1, 0].set_title("(2,1) Clock-Only (Animated)")
+axes[1, 0].legend(loc="best", fontsize=8)
+
+# (2,2) Animated: feedback
+axes[1, 1].plot(q_des_feedback[:, 0], q_des_feedback[:, 1], "--", color="gray", linewidth=2, label="desired")
+traj_feedback, = axes[1, 1].plot([], [], color="tab:blue", linewidth=2.5, label="actual")
+particle_feedback, = axes[1, 1].plot([], [], "o", color="tab:orange", markersize=6)
+axes[1, 1].scatter(g[0], g[1], color="crimson", marker="*", s=80, label="goal")
+axes[1, 1].set_title("(2,2) Feedback (Animated)")
+axes[1, 1].legend(loc="best", fontsize=8)
+
+for ax in axes.ravel():
+    ax.set_xlabel(r"$q_1$")
+    ax.set_ylabel(r"$q_2$")
+    ax.set_aspect("equal", adjustable="box")
+    ax.set_xlim(*xlim)
+    ax.set_ylim(*ylim)
+    ax.grid(alpha=0.3)
+
+def update(frame_idx):
+    traj_clock.set_data(q_act_clock[: frame_idx + 1, 0], q_act_clock[: frame_idx + 1, 1])
+    particle_clock.set_data([q_act_clock[frame_idx, 0]], [q_act_clock[frame_idx, 1]])
+    traj_feedback.set_data(q_act_feedback[: frame_idx + 1, 0], q_act_feedback[: frame_idx + 1, 1])
+    particle_feedback.set_data([q_act_feedback[frame_idx, 0]], [q_act_feedback[frame_idx, 1]])
+    return traj_clock, particle_clock, traj_feedback, particle_feedback
+
+ani = FuncAnimation(fig, update, frames=M, interval=25, blit=True)
+
+cwd = Path.cwd()
+if (cwd / "notes").exists():
+    media_dir = cwd / "notes" / "imgs" / "02-dynamic-movement-primitives"
+else:
+    media_dir = cwd / "imgs" / "02-dynamic-movement-primitives"
+media_dir.mkdir(parents=True, exist_ok=True)
+webm_path = media_dir / "dmp_perturbation_2x2.webm"
+tmp_gif_path = media_dir / "_tmp_dmp_perturbation_2x2.gif"
+
+ani.save(str(tmp_gif_path), writer=PillowWriter(fps=30))
+subprocess.run(
+    [
+        "ffmpeg", "-y",
+        "-i", str(tmp_gif_path),
+        "-c:v", "libvpx-vp9",
+        "-b:v", "0",
+        "-crf", "36",
+        "-an",
+        str(webm_path),
+    ],
+    check=True,
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL,
+)
+tmp_gif_path.unlink(missing_ok=True)
+plt.close(fig)
+```
+
+Both approaches use the same high-stiffness low-level PD controller and receive
+the same large perturbation in the middle of execution. The plots show **actual states**
+as solid curves and **desired states** as dashed curves.
+
+<video src="imgs/02-dynamic-movement-primitives/dmp_perturbation_2x2.webm" controls autoplay loop muted playsinline style="width:100%"></video>
+::::
+
+There are many additional topics, such as obstacle avoidance, phase modulation,
+and DMPs on curved spaces (e.g., SE(3)); please refer to the references.
+
+## References {.unnumbered}
+
+- Saveriano, Matteo, et al. "Dynamic movement primitives in robotics: A tutorial survey." The International Journal of Robotics Research 42.13 (2023): 1133-1184.

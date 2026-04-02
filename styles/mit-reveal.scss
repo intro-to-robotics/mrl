@@ -47,3 +47,25 @@ $code-block-bg: #f8f9fa;
 .reveal .footer a:hover {
   background: #750014;
 }
+
+.reveal .center {
+  text-align: center;
+}
+
+.reveal .center pre.mermaid,
+.reveal .center div.mermaid {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.reveal .center div.mermaid svg {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.reveal .large-mermaid .mermaid svg {
+  width: 90vw !important;
+  max-width: 90vw !important;
+  height: auto !important;
+}

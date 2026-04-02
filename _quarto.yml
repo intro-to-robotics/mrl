@@ -15,6 +15,7 @@ project:
     - code/**/*.json
     - code/**/*.png
     - code/**/*.gif
+    - notes/imgs/**/*.webm
 
 website:
   title: "Modern Robot Learning"
