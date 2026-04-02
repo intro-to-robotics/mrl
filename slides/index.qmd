@@ -2,8 +2,28 @@
 title: "Slides"
 ---
 
-Slide decks for this project.
-
-## Decks
-
-- [Welcome](01-welcome.qmd)
+#### Slides
+<div style="font-size: 0.55em;">
+:::: {.lecture-list}
+[Lecture 01: Introduction to Robot Learning](01-welcome.qmd)<br>
+Lecture 02: Dynamic Movement Primitives<br>
+Lecture 03: Learning Stable Dynamical Systems<br>
+Lecture 04: Autoencoders<br>
+Lecture 05: Variational Autoencoders<br>
+Lecture 06: Geometric Autoencoders<br>
+Lecture 07: Brownian Motion and Wiener Process<br>
+Lecture 08: Stochastic Differential Equations<br>
+Lecture 09: Score-Based Generative Models<br>
+Lecture 10: Diffusion Models and Diffusion Policy<br>
+Lecture 11: Neural ODEs<br>
+Lecture 12: Flow Matching for Robot Policy Learning<br>
+Lecture 13: Continuous-Time Optimal Control<br>
+Lecture 14: Hamilton--Jacobi--Bellman Equations<br>
+Lecture 15: Discrete-Time Reinforcement Learning Foundations<br>
+Lecture 16: Policy Gradient Fundamentals<br>
+Lecture 17: REINFORCE and Variance Reduction<br>
+Lecture 18: Actor--Critic and Advanced Policy Optimization<br>
+Lecture 19: Reinforcement Learning for Robot Control<br>
+Lecture 20: Vision-Language-Action Models, World Models, and Robot Foundation Models<br>
+::::
+</div>

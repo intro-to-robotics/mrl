@@ -38,4 +38,5 @@ for robotic decision-making and control.
 |  | Week 15 | Lecture 19: Reinforcement Learning for Robot Control |  |  |
 |  | Week 16 | Lecture 20: Vision-Language-Action Models, World Models, and Robot Foundation Models |  |  |
 
-Full notes index: [Lecture Notes](notes/index.qmd).
+Full notes index: [Lecture Notes](notes/index.qmd)<br>
+Full slides index: [Lecture Slides](slides/index.qmd)
