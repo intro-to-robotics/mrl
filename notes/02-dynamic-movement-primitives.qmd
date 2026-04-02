@@ -5,38 +5,32 @@ execute:
 ---
 
 Let $\mathcal{Q} = \mathbb{R}^{n}$ denote the configuration space.
-The simplest representation of robot motion (trajectory) data we can collect is a sequence of time-configuration pairs:
+The simplest representation of robot motion (trajectory) data is a sequence of time-configuration pairs:
 \begin{equation}
 \big((t_1, q_1), (t_2, q_2), \ldots, (t_N, q_N)\big),
 \end{equation}
 where $t_i \in [0, T]$ denotes the time variable -- where $0=t_1 < t_2 < \cdots < t_N=T$ with the terminal time $T$ 
 -- and $q_i \in \mathcal{Q}$ is an $n$-dimensional vector.
 
-Given a single trajectory, the simplest robot learning problem
+Then, the simplest robot learning problem
 is to learn a policy that maps the clock variable $t$ to an action so that 
 the robot can reproduce the demonstrated trajectory.
-We consider desired position, velocity, and acceleration
-as actions, denoted by
+The action can be defined in multiple ways; here, we consider 
+desired position, velocity, and acceleration as an action, denoted by
 $a = (q_{\mathrm{des}}, \dot{q}_{\mathrm{des}}, \ddot{q}_{\mathrm{des}})$.
 Then, a low-level controller, e.g., computed torque control, tracks this command.
 
-We require the policy to satisfy two criteria.
-First, it should drive the robot to the goal point
-$g := q_N$ (i.e., the terminal point of the demonstrated trajectory)
-as $t \to \infty$.
-Second, it should allow slight modulation of the goal point
-while preserving the overall shape of the trajectory.
-
-Dynamic Movement Primitives (DMP), inspired by the motor control of
+__Dynamic Movement Primitives (DMP)__, inspired by the motor control of
 biological systems, have elegant formulation, guarantee convergence 
-to a given target, are sufficiently flexible to create complex behaviors, 
+to a given target (i.e., $q \to g=q_N$ as $t \to \infty$), 
+are sufficiently flexible to create complex behaviors, 
 and can be learned from data using efficient algorithms.
 
 At $t = 0$, initialize the desired state as
 \begin{equation}
 \big(q_{\mathrm{des}}(0), \dot{q}_{\mathrm{des}}(0), \ddot{q}_{\mathrm{des}}(0)\big) = \big(q_1, 0, 0\big),
 \end{equation}
-and a continuous-time DMP can be written as:
+and the DMP can be written as:
 \begin{equation}
 \ddot{q}_{\mathrm{des}}(t) = K\big(g - q_{\mathrm{des}}(t)\big) - D \dot{q}_{\mathrm{des}}(t) + f(t;\theta),
 \end{equation}
@@ -45,18 +39,21 @@ The function $f(t;{\theta}) \in \mathbb{R}^{n}$ is parameterized by $\theta \in 
 This parametric forcing term modulates the trajectory shape beyond linear
 mass-spring-damper dynamics.
 
-The forcing term can be defined as a normalized weighted sum of
+Let $s(t) = \max\!\left(1 - \frac{t}{T}, 0\right)$ be a phase variable that starts at $1$, decreases to $0$,
+and then remains at $0$. 
+Then the forcing term can be defined as a normalized weighted sum of
 $N$ radial basis functions (RBFs):
 \begin{align}
     f(t;\theta) &= \left(\frac{\sum_{i=1}^{N} \theta_i \psi_i(s)}{\sum_{i=1}^{N} \psi_i(s)}\right)s, \\
-    \psi_i(s) &= \exp\!\left(-\frac{(s - c_i)^2}{\delta^2}\right), \\
-    s(t) &= \max\!\left(1 - \frac{t}{T}, 0\right).
+    \psi_i(s) &= \exp\!\left(-\frac{(s - c_i)^2}{\delta^2}\right).
 \end{align}
-Here, $s$ is a phase variable that starts at $1$, decreases to $0$,
-and then remains at $0$. Each $\theta_i \in \mathbb{R}^{n}$ is a learnable
+Note that if $s \to 0$, then $f \to 0$, 
+recovering the stable mass-spring-damper system.
+Each $\theta_i \in \mathbb{R}^{n}$ is a learnable
 weight vector, and each $\psi_i(s) \in \mathbb{R}$ is a scalar basis function.
 The basis centers are typically chosen as $c_i = \frac{i-1}{N-1}$ with
-a shared width $\delta = \frac{1}{N-1}$.
+a shared width $\delta = \frac{1}{N-1}$. 
+
 
 Using a forward-Euler discretization with time step $h$ and
 $t_k = kh$, the desired state is updated at each step $k$ as:
@@ -572,24 +569,76 @@ plt.close(fig)
 
 Recall that this policy takes only the clock variable $t$ as input.
 That is, it has no sensory-feedback input.
-As a result, it is not robust to external disturbances: if the robot is pushed far away
+As a result, it is not very robust to external disturbances: 
+if the robot is pushed far away
 from the demonstrated trajectory, or if a temporal perturbation occurs
 (e.g., the robot is held still while time continues to flow),
 the desired state still advances and converges according to the internal clock.
 
-An alternative way to use a learned DMP model is to define the acceleration command
-directly from sensory feedback:
-\begin{equation}
-    \ddot{q}_{\mathrm{des}} = K(g - q) - D\dot{q} + f(t; \theta),
-\end{equation}
-where $(q,\dot{q})$ is the proprioceptive state. 
-This is still not fully robust to temporal disturbances because
-$f$ remains time-dependent.
-However, it typically leads to less dangerous behavior under
-a high-stiffness low-level position controller.
-See the example below:
 
-:::: {#exm-perturbation-comparison name="Clock-Only vs Feedback DMP Under Large Perturbation"}
+Next, we consider the space of $3 \times 3$ rotation matrices as a configuration
+space, denoted by
+\begin{equation}
+    \mathrm{SO}(3) = \{R \in \mathbb{R}^{3 \times 3} \mid R^T R = I,\ \det(R) = 1\}.
+\end{equation}
+A rotation matrix is often used to represent the orientation of a rigid body.
+Consider a smooth curve $R(t)$ in $\mathrm{SO}(3)$.
+Differentiating the constraints gives
+\begin{align}
+    \frac{d}{dt}(R^T R) &= \dot{R}^T R + R^T \dot{R} = 0, \\
+    \frac{d}{dt}\det(R) &= \det(R)\,\mathrm{tr}(R^{-1}\dot{R}) = 0.
+\end{align}
+These come from the orthogonality constraint and the determinant constraint,
+respectively.
+
+Defining $\Omega = R^T \dot{R}$, we obtain
+\begin{equation}
+    \Omega^T + \Omega = 0,
+\end{equation}
+so $\Omega$ is skew-symmetric. We parameterize it by $\omega \in \mathbb{R}^3$ as
+\begin{equation}
+    \Omega = [\omega] :=
+    \begin{bmatrix}
+        0 & -\omega^3 & \omega^2 \\
+        \omega^3 & 0 & -\omega^1 \\
+        -\omega^2 & \omega^1 & 0
+    \end{bmatrix}.
+\end{equation}
+The trace condition $\mathrm{tr}(\Omega) = 0$ is automatically satisfied for any
+skew-symmetric matrix. 
+Note the inverse of $\Omega = [\omega]$ is denoted as $\omega = \mathrm{unskew}(\Omega)$.
+Hence, the rotational kinematics can be written as
+\begin{equation}
+    \dot{R} = R[\omega].
+\end{equation}
+Here, $\omega = (\omega^1,\omega^2,\omega^3)^T$ is the angular velocity of the
+rigid body, expressed in the body frame associated with $R(t)$.
+
+Let $s(t) = \max\!\left(1 - \frac{t}{T}, 0\right)$ be a phase variable that starts
+at $1$, decreases to $0$, and then remains at $0$.
+For pose DMPs in $\mathrm{SE}(3)$, we model the state as
+$\mathrm{SO}(3) \times \mathbb{R}^{3}$ and use
+\begin{align}
+    \ddot{p} &= K_p (p_g - p) - D_p \dot{p} + f_p(s;\theta_p), \\
+    \dot{\omega} &= K_R e_R - D_R \omega + f_R(s;\theta_R), \\
+    \dot{R} &= R[\omega],
+\end{align}
+where $p \in \mathbb{R}^3$ is position, $R \in \mathrm{SO}(3)$ is orientation, and
+\begin{equation}
+    e_R = \mathrm{unskew}\big(\log(R^T R_g)\big)
+\end{equation}
+is the orientation error with respect to the goal orientation
+$R_g \in \mathrm{SO}(3)$.
+Both forcing terms use the same RBF structure as in the Euclidean case:
+\begin{equation}
+    f_\star(s;\theta_\star) =
+    \left(\frac{\sum_{i=1}^{N}\theta_{\star,i}\psi_i(s)}{\sum_{i=1}^{N}\psi_i(s)}\right)s,
+    \qquad \star \in \{p, R\}.
+\end{equation}
+The next example follows the structure of Example 3 and visualizes
+joint goal modulation in position and orientation.
+
+::::: {#exm-dmp-se3-goal-orientation-modulation name="SE(3) DMP Goal Orientation Modulation"}
 ```{python}
 #| code-fold: true
 #| code-summary: "Show Python code"
@@ -599,154 +648,286 @@ from matplotlib.animation import FuncAnimation, PillowWriter
 from pathlib import Path
 import subprocess
 
-# 1) Build a demonstration and learn theta
-T = 2.0
-h = 0.005
+# ---------- SO(3) utilities ----------
+def hat(w):
+    wx, wy, wz = w
+    return np.array(
+        [
+            [0.0, -wz, wy],
+            [wz, 0.0, -wx],
+            [-wy, wx, 0.0],
+        ]
+    )
+
+def vee(W):
+    return np.array([W[2, 1], W[0, 2], W[1, 0]])
+
+def exp_so3(phi):
+    theta = np.linalg.norm(phi)
+    W = hat(phi)
+    if theta < 1e-10:
+        return np.eye(3) + W
+    A = np.sin(theta) / theta
+    B = (1.0 - np.cos(theta)) / (theta**2)
+    return np.eye(3) + A * W + B * (W @ W)
+
+def log_so3(R):
+    cos_theta = (np.trace(R) - 1.0) / 2.0
+    cos_theta = np.clip(cos_theta, -1.0, 1.0)
+    theta = np.arccos(cos_theta)
+    if theta < 1e-10:
+        return 0.5 * (R - R.T)
+    return (theta / (2.0 * np.sin(theta))) * (R - R.T)
+
+# 1) Build an SE(3) demonstration and learn theta once
+T = 2.5
+h = 0.01
 t = np.arange(0.0, T + h, h)
 M = len(t)
-
 tau = t / T
-x_demo = -1.0 + 2.0 * tau
-base_s = x_demo**5 - x_demo
-wiggle = np.sin(4.0 * np.pi * tau) * (1.0 - (2.0 * tau - 1.0) ** 2)
-y_demo = 1.6 * base_s + 0.25 * wiggle
-q_demo = np.column_stack([x_demo, y_demo])
-
-qd_demo = np.gradient(q_demo, h, axis=0)
-qdd_demo = np.gradient(qd_demo, h, axis=0)
-
-N = 35
 s = np.maximum(1.0 - t / T, 0.0)
+
+# Translation demonstration p_demo in R^3
+x_demo = -0.8 + 1.6 * tau
+y_demo = 0.35 * np.sin(np.pi * tau) * (1.0 - 0.2 * tau)
+z_demo = 0.25 + 0.18 * (1.0 - np.cos(np.pi * tau))
+p_demo = np.column_stack([x_demo, y_demo, z_demo])
+pd_demo = np.gradient(p_demo, h, axis=0)
+pdd_demo = np.gradient(pd_demo, h, axis=0)
+
+# Orientation demonstration R_demo in SO(3), generated from smooth body rates
+omega_demo = np.column_stack(
+    [
+        0.9 * np.sin(np.pi * tau) * (1.0 - tau),
+        0.6 * np.sin(2.0 * np.pi * tau) * (1.0 - tau),
+        1.1 * np.sin(np.pi * tau),
+    ]
+)
+omega_dot_demo = np.gradient(omega_demo, h, axis=0)
+
+R_demo = np.zeros((M, 3, 3))
+R_demo[0] = exp_so3(np.deg2rad(np.array([10.0, -8.0, 15.0])))
+for k in range(M - 1):
+    R_demo[k + 1] = R_demo[k] @ exp_so3(h * omega_demo[k])
+
+# 2) Basis features (shared phase variable)
+N = 35
 c = np.linspace(0.0, 1.0, N)
 delta = 1.0 / (N - 1)
 psi = np.exp(-((s[:, None] - c[None, :]) ** 2) / (delta**2))
 Phi = (psi / (psi.sum(axis=1, keepdims=True) + 1e-12)) * s[:, None]  # M x N
 
-K_dmp = np.diag([100.0, 100.0])
-D_dmp = np.diag([20.0, 20.0])
-g = q_demo[-1]
+# 3) Learn translational and rotational forcing terms
+Kp = np.diag([90.0, 90.0, 90.0])
+Dp = np.diag([18.0, 18.0, 18.0])
+KR = np.diag([45.0, 45.0, 45.0])
+DR = np.diag([12.0, 12.0, 12.0])
 
-f_target = qdd_demo - (K_dmp @ (g - q_demo).T).T + (D_dmp @ qd_demo.T).T
+p_g0 = p_demo[-1]
+R_g0 = R_demo[-1]
+
+f_p_target = pdd_demo - (Kp @ (p_g0 - p_demo).T).T + (Dp @ pd_demo.T).T
+
+eR_demo = np.zeros((M, 3))
+for k in range(M):
+    eR_demo[k] = vee(log_so3(R_demo[k].T @ R_g0))
+f_R_target = omega_dot_demo - (KR @ eR_demo.T).T + (DR @ omega_demo.T).T
+
 lam = 1e-4
 A = Phi.T @ Phi + lam * np.eye(N)
-theta = np.linalg.solve(A, Phi.T @ f_target).T  # 2 x N
+theta_p = np.linalg.solve(A, Phi.T @ f_p_target).T  # 3 x N
+theta_R = np.linalg.solve(A, Phi.T @ f_R_target).T  # 3 x N
 
-# 2) Two policy variants with the same low-level high-stiffness PD controller
-Kp_ll = np.diag([450.0, 450.0])
-Kd_ll = np.diag([60.0, 60.0])
-
-t_push_start = 0.80
-t_push_end = 1.20
-push = np.array([500.0, -200.0])  # large external perturbation
-
-def simulate(mode):
-    q_act = np.zeros((M, 2))
-    qd_act = np.zeros((M, 2))
-    q_des = np.zeros((M, 2))
-    qd_des = np.zeros((M, 2))
-    qdd_des = np.zeros((M, 2))
-
-    q_act[0] = q_demo[0]
-    q_des[0] = q_demo[0]
+# 4) Rollout function for a given (position, orientation) goal
+def rollout(p_goal, R_goal):
+    p = np.zeros((M, 3))
+    pd = np.zeros((M, 3))
+    omega = np.zeros((M, 3))
+    R = np.zeros((M, 3, 3))
+    p[0] = p_demo[0]
+    R[0] = R_demo[0]
 
     for k in range(M - 1):
-        f_hat = theta @ Phi[k]
+        f_p = theta_p @ Phi[k]
+        pdd = Kp @ (p_goal - p[k]) - Dp @ pd[k] + f_p
+        pd[k + 1] = pd[k] + h * pdd
+        p[k + 1] = p[k] + h * pd[k]
 
-        if mode == "clock_only":
-            # Open-loop desired dynamics driven only by internal clock t
-            qdd_des[k] = K_dmp @ (g - q_des[k]) - D_dmp @ qd_des[k] + f_hat
-        elif mode == "feedback":
-            # Desired acceleration is computed from actual proprioceptive state
-            qdd_des[k] = K_dmp @ (g - q_act[k]) - D_dmp @ qd_act[k] + f_hat
-        else:
-            raise ValueError("Unknown mode.")
+        eR = vee(log_so3(R[k].T @ R_goal))
+        f_R = theta_R @ Phi[k]
+        omega_dot = KR @ eR - DR @ omega[k] + f_R
+        omega[k + 1] = omega[k] + h * omega_dot
+        R[k + 1] = R[k] @ exp_so3(h * omega[k + 1])
 
-        qd_des[k + 1] = qd_des[k] + h * qdd_des[k]
-        q_des[k + 1] = q_des[k] + h * qd_des[k]
+    return p, R
 
-        disturbance = push if (t_push_start <= t[k] <= t_push_end) else np.zeros(2)
-        qdd_act = Kp_ll @ (q_des[k] - q_act[k]) + Kd_ll @ (qd_des[k] - qd_act[k]) + disturbance
+# 5) Original + three SE(3) goal changes (position + orientation modulated together)
+goal_specs = [
+    ("Original Goal", p_g0, R_g0),
+    (
+        "Goal Change 1",
+        p_g0 + np.array([0.28, -0.18, 0.12]),
+        R_g0 @ exp_so3(np.array([0.0, 0.0, np.deg2rad(40.0)])),
+    ),
+    (
+        "Goal Change 2",
+        p_g0 + np.array([-0.22, 0.20, 0.10]),
+        R_g0 @ exp_so3(np.array([0.0, np.deg2rad(-32.0), np.deg2rad(12.0)])),
+    ),
+    (
+        "Goal Change 3",
+        p_g0 + np.array([0.16, 0.14, -0.10]),
+        R_g0 @ exp_so3(np.array([np.deg2rad(32.0), 0.0, np.deg2rad(-18.0)])),
+    ),
+]
+rollouts = [rollout(pg, Rg) for _, pg, Rg in goal_specs]
 
-        qd_act[k + 1] = qd_act[k] + h * qdd_act
-        q_act[k + 1] = q_act[k] + h * qd_act[k]
+# 6) Build a (2,2) animated 3D figure and visualize SE(3) as RGB frames
+fig, axes = plt.subplots(
+    2, 2, figsize=(12.5, 9.5), subplot_kw={"projection": "3d"}, constrained_layout=True
+)
+axes_flat = axes.ravel()
 
-    return q_act, q_des
+frame_scale = 0.12
+frame_colors = ["#d62728", "#2ca02c", "#1f77b4"]  # x=red, y=green, z=blue
+axis_labels = ["x", "y", "z"]
 
-q_act_clock, q_des_clock = simulate("clock_only")
-q_act_feedback, q_des_feedback = simulate("feedback")
+# Orientation trajectory: tip trajectories of body-frame axes over time
+tip_trajs = []
+for p_roll, R_roll in rollouts:
+    tips = []
+    for i in range(3):
+        tips.append(p_roll + frame_scale * R_roll[:, :, i])
+    tip_trajs.append(tips)
 
-# 3) Build a (2,2) figure:
-# (1,1), (1,2): static comparisons
-# (2,1), (2,2): corresponding animated rollouts
-p0 = np.argmin(np.abs(t - t_push_start))
-p1 = np.argmin(np.abs(t - t_push_end))
+# Global axis-equal limits for all panels
+all_points = [p_demo]
+all_points += [p_roll for p_roll, _ in rollouts]
+all_points += [np.vstack([spec[1] for spec in goal_specs])]
+for tips in tip_trajs:
+    all_points += tips
+all_pts = np.vstack(all_points)
+p_min = all_pts.min(axis=0)
+p_max = all_pts.max(axis=0)
+p_ctr = 0.5 * (p_min + p_max)
+radius = 0.5 * np.max(p_max - p_min) + 0.05
+xlim = (p_ctr[0] - radius, p_ctr[0] + radius)
+ylim = (p_ctr[1] - radius, p_ctr[1] + radius)
+zlim = (p_ctr[2] - radius, p_ctr[2] + radius)
 
-all_x = np.concatenate([
-    q_demo[:, 0], q_act_clock[:, 0], q_des_clock[:, 0],
-    q_act_feedback[:, 0], q_des_feedback[:, 0],
-])
-all_y = np.concatenate([
-    q_demo[:, 1], q_act_clock[:, 1], q_des_clock[:, 1],
-    q_act_feedback[:, 1], q_des_feedback[:, 1],
-])
-pad = 0.2
-xlim = (all_x.min() - pad, all_x.max() + pad)
-ylim = (all_y.min() - pad, all_y.max() + pad)
+traj_lines = []
+particles = []
+current_frame_lines = []
+ori_traj_lines = []
 
-fig, axes = plt.subplots(2, 2, figsize=(12, 9), constrained_layout=True)
+def make_frame_lines(ax, alpha=1.0, linestyle="-", linewidth=2.0, labels=None):
+    lines = []
+    for i, color in enumerate(frame_colors):
+        kwargs = {}
+        if labels is not None:
+            kwargs["label"] = labels[i]
+        line, = ax.plot(
+            [], [], [], color=color, alpha=alpha, linestyle=linestyle, linewidth=linewidth, **kwargs
+        )
+        lines.append(line)
+    return lines
 
-# (1,1) Static: clock-only
-axes[0, 0].plot(q_des_clock[:, 0], q_des_clock[:, 1], "--", color="gray", linewidth=2, label="desired")
-axes[0, 0].plot(q_act_clock[:, 0], q_act_clock[:, 1], color="tab:blue", linewidth=2.5, label="actual")
-axes[0, 0].scatter(q_demo[0, 0], q_demo[0, 1], color="black", s=35, label="start")
-axes[0, 0].scatter(g[0], g[1], color="crimson", marker="*", s=80, label="goal")
-axes[0, 0].scatter(q_act_clock[p0, 0], q_act_clock[p0, 1], color="tab:red", marker="x", s=70, label="perturb. start")
-axes[0, 0].scatter(q_act_clock[p1, 0], q_act_clock[p1, 1], color="tab:purple", marker="x", s=70, label="perturb. end")
-axes[0, 0].set_title("(1,1) Clock-Only (Static)")
-axes[0, 0].legend(loc="best", fontsize=8)
+def set_frame_lines(lines, p, R, scale):
+    for i in range(3):
+        tip = p + scale * R[:, i]
+        lines[i].set_data_3d([p[0], tip[0]], [p[1], tip[1]], [p[2], tip[2]])
 
-# (1,2) Static: feedback
-axes[0, 1].plot(q_des_feedback[:, 0], q_des_feedback[:, 1], "--", color="gray", linewidth=2, label="desired")
-axes[0, 1].plot(q_act_feedback[:, 0], q_act_feedback[:, 1], color="tab:blue", linewidth=2.5, label="actual")
-axes[0, 1].scatter(q_demo[0, 0], q_demo[0, 1], color="black", s=35, label="start")
-axes[0, 1].scatter(g[0], g[1], color="crimson", marker="*", s=80, label="goal")
-axes[0, 1].scatter(q_act_feedback[p0, 0], q_act_feedback[p0, 1], color="tab:red", marker="x", s=70, label="perturb. start")
-axes[0, 1].scatter(q_act_feedback[p1, 0], q_act_feedback[p1, 1], color="tab:purple", marker="x", s=70, label="perturb. end")
-axes[0, 1].set_title("(1,2) Feedback (Static)")
-axes[0, 1].legend(loc="best", fontsize=8)
+for idx, ((title, p_goal, R_goal), (p_roll, R_roll)) in enumerate(zip(goal_specs, rollouts)):
+    ax = axes_flat[idx]
+    ax.plot(
+        p_demo[:, 0], p_demo[:, 1], p_demo[:, 2],
+        "--", color="gray", linewidth=1.8, label="demo position" if idx == 0 else None
+    )
+    ax.scatter(
+        p_demo[0, 0], p_demo[0, 1], p_demo[0, 2],
+        color="black", s=28, label="start" if idx == 0 else None
+    )
+    ax.scatter(
+        p_goal[0], p_goal[1], p_goal[2],
+        color="crimson", marker="*", s=75, label="goal position" if idx == 0 else None
+    )
 
-# (2,1) Animated: clock-only
-axes[1, 0].plot(q_des_clock[:, 0], q_des_clock[:, 1], "--", color="gray", linewidth=2, label="desired")
-traj_clock, = axes[1, 0].plot([], [], color="tab:blue", linewidth=2.5, label="actual")
-particle_clock, = axes[1, 0].plot([], [], "o", color="tab:orange", markersize=6)
-axes[1, 0].scatter(g[0], g[1], color="crimson", marker="*", s=80, label="goal")
-axes[1, 0].set_title("(2,1) Clock-Only (Animated)")
-axes[1, 0].legend(loc="best", fontsize=8)
+    # Static target orientation frame (faded)
+    goal_frame = make_frame_lines(
+        ax,
+        alpha=0.35,
+        linestyle="--",
+        linewidth=1.7,
+        labels=["goal x", "goal y", "goal z"] if idx == 0 else None,
+    )
+    set_frame_lines(goal_frame, p_goal, R_goal, frame_scale)
 
-# (2,2) Animated: feedback
-axes[1, 1].plot(q_des_feedback[:, 0], q_des_feedback[:, 1], "--", color="gray", linewidth=2, label="desired")
-traj_feedback, = axes[1, 1].plot([], [], color="tab:blue", linewidth=2.5, label="actual")
-particle_feedback, = axes[1, 1].plot([], [], "o", color="tab:orange", markersize=6)
-axes[1, 1].scatter(g[0], g[1], color="crimson", marker="*", s=80, label="goal")
-axes[1, 1].set_title("(2,2) Feedback (Animated)")
-axes[1, 1].legend(loc="best", fontsize=8)
+    # Animated trajectory + current SE(3) frame
+    line, = ax.plot([], [], [], color="tab:orange", linewidth=2.2, label="SE(3) rollout" if idx == 0 else None)
+    pt, = ax.plot([], [], [], "o", color="black", markersize=4)
+    current_frame = make_frame_lines(
+        ax,
+        alpha=1.0,
+        linestyle="-",
+        linewidth=2.2,
+        labels=["current x", "current y", "current z"] if idx == 0 else None,
+    )
+    traj_lines.append(line)
+    particles.append(pt)
+    current_frame_lines.append(current_frame)
 
-for ax in axes.ravel():
-    ax.set_xlabel(r"$q_1$")
-    ax.set_ylabel(r"$q_2$")
-    ax.set_aspect("equal", adjustable="box")
+    # Orientation trajectory (axis-tip paths)
+    ori_lines = []
+    for i, color in enumerate(frame_colors):
+        ol, = ax.plot(
+            [], [], [],
+            color=color,
+            linewidth=1.2,
+            linestyle=":",
+            alpha=0.85,
+            label=f"{axis_labels[i]}-tip traj" if idx == 0 else None,
+        )
+        ori_lines.append(ol)
+    ori_traj_lines.append(ori_lines)
+
+    ax.set_title(title)
+    ax.set_xlabel(r"$x$")
+    ax.set_ylabel(r"$y$")
+    ax.set_zlabel(r"$z$")
     ax.set_xlim(*xlim)
     ax.set_ylim(*ylim)
+    ax.set_zlim(*zlim)
+    ax.view_init(elev=24, azim=-58)
+    if hasattr(ax, "set_box_aspect"):
+        ax.set_box_aspect((1.0, 1.0, 1.0))
     ax.grid(alpha=0.3)
+    if idx == 0:
+        ax.legend(loc="upper left", fontsize=7)
 
 def update(frame_idx):
-    traj_clock.set_data(q_act_clock[: frame_idx + 1, 0], q_act_clock[: frame_idx + 1, 1])
-    particle_clock.set_data([q_act_clock[frame_idx, 0]], [q_act_clock[frame_idx, 1]])
-    traj_feedback.set_data(q_act_feedback[: frame_idx + 1, 0], q_act_feedback[: frame_idx + 1, 1])
-    particle_feedback.set_data([q_act_feedback[frame_idx, 0]], [q_act_feedback[frame_idx, 1]])
-    return traj_clock, particle_clock, traj_feedback, particle_feedback
+    artists = []
+    for j in range(4):
+        p_roll, R_roll = rollouts[j]
+        p_now = p_roll[frame_idx]
+        R_now = R_roll[frame_idx]
+        traj_lines[j].set_data_3d(
+            p_roll[: frame_idx + 1, 0],
+            p_roll[: frame_idx + 1, 1],
+            p_roll[: frame_idx + 1, 2],
+        )
+        particles[j].set_data_3d([p_now[0]], [p_now[1]], [p_now[2]])
+        set_frame_lines(current_frame_lines[j], p_now, R_now, frame_scale)
+        for i in range(3):
+            tip_i = tip_trajs[j][i]
+            ori_traj_lines[j][i].set_data_3d(
+                tip_i[: frame_idx + 1, 0],
+                tip_i[: frame_idx + 1, 1],
+                tip_i[: frame_idx + 1, 2],
+            )
+        artists.extend([traj_lines[j], particles[j], *current_frame_lines[j], *ori_traj_lines[j]])
+    return artists
 
-ani = FuncAnimation(fig, update, frames=M, interval=25, blit=True)
+ani = FuncAnimation(fig, update, frames=M, interval=25, blit=False)
 
 cwd = Path.cwd()
 if (cwd / "notes").exists():
@@ -754,8 +935,8 @@ if (cwd / "notes").exists():
 else:
     media_dir = cwd / "imgs" / "02-dynamic-movement-primitives"
 media_dir.mkdir(parents=True, exist_ok=True)
-webm_path = media_dir / "dmp_perturbation_2x2.webm"
-tmp_gif_path = media_dir / "_tmp_dmp_perturbation_2x2.gif"
+webm_path = media_dir / "dmp_se3_goal_pose_modulation_3d_2x2.webm"
+tmp_gif_path = media_dir / "_tmp_dmp_se3_goal_pose_modulation_3d_2x2.gif"
 
 ani.save(str(tmp_gif_path), writer=PillowWriter(fps=30))
 subprocess.run(
@@ -776,15 +957,8 @@ tmp_gif_path.unlink(missing_ok=True)
 plt.close(fig)
 ```
 
-Both approaches use the same high-stiffness low-level PD controller and receive
-the same large perturbation in the middle of execution. The plots show **actual states**
-as solid curves and **desired states** as dashed curves.
-
-<video src="imgs/02-dynamic-movement-primitives/dmp_perturbation_2x2.webm" controls autoplay loop muted playsinline style="width:100%"></video>
-::::
-
-There are many additional topics, such as obstacle avoidance, phase modulation,
-and DMPs on curved spaces (e.g., SE(3)); please refer to the references.
+<video src="imgs/02-dynamic-movement-primitives/dmp_se3_goal_pose_modulation_3d_2x2.webm" controls autoplay loop muted playsinline style="width:100%"></video>
+:::::
 
 ## References {.unnumbered}
 

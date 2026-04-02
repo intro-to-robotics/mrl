@@ -1,0 +1,22 @@
+2026-04-02 11:03:41,455 - traitlets - ERROR - [Errno 1] Operation not permitted
+Traceback (most recent call last):
+  File "/home/yhlee/.local/lib/python3.10/site-packages/jupyter_core/utils/__init__.py", line 154, in wrapped
+    asyncio.get_running_loop()
+RuntimeError: no running event loop
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/yhlee/.local/lib/python3.10/site-packages/jupyter_client/manager.py", line 87, in wrapper
+    out = await method(self, *args, **kwargs)
+  File "/home/yhlee/.local/lib/python3.10/site-packages/jupyter_client/manager.py", line 435, in _async_start_kernel
+    kernel_cmd, kw = await self._async_pre_start_kernel(**kw)
+  File "/home/yhlee/.local/lib/python3.10/site-packages/jupyter_client/manager.py", line 400, in _async_pre_start_kernel
+    kw = await self.provisioner.pre_launch(**kw)
+  File "/home/yhlee/.local/lib/python3.10/site-packages/jupyter_client/provisioning/local_provisioner.py", line 185, in pre_launch
+    km.shell_port = lpc.find_available_port(km.ip)
+  File "/home/yhlee/.local/lib/python3.10/site-packages/jupyter_client/connect.py", line 702, in find_available_port
+    tmp_sock = socket.socket()
+  File "/usr/lib/python3.10/socket.py", line 232, in __init__
+    _socket.socket.__init__(self, family, type, proto, fileno)
+PermissionError: [Errno 1] Operation not permitted
