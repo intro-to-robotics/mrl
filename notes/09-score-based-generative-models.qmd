@@ -2,6 +2,3 @@
 title: "Lecture 09: Score-Based Generative Models"
 ---
 
-## Overview
-
-TBD.

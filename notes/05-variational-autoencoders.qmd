@@ -2,6 +2,3 @@
 title: "Lecture 05: Variational Autoencoders"
 ---
 
-## Overview
-
-TBD.

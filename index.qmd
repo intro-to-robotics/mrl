@@ -17,25 +17,25 @@ for robotic decision-making and control.
 
 | Date | Week | Lecture | Notes | Slides |
 |---|---|---|---|---|
-| TBD | Week 1 | Lecture 01: Introduction to Robot Learning |  | [Slides](slides/01-welcome.qmd)
-| TBD | Week 1 | Lecture 02: Dynamic Movement Primitives | [Notes](notes/02-dynamic-movement-primitives.qmd) | TBD |
-| TBD | Week 2 | Lecture 03: Learning Stable Dynamical Systems | TBD | TBD |
-| TBD | Week 2 | Lecture 04: Autoencoders | TBD | TBD |
-| TBD | Week 3 | Lecture 05: Variational Autoencoders | TBD | TBD |
-| TBD | Week 3 | Lecture 06: Geometric Autoencoders | TBD | TBD |
-| TBD | Week 4 | Lecture 07: Brownian Motion and Wiener Process | TBD | TBD |
-| TBD | Week 4 | Lecture 08: Stochastic Differential Equations | TBD | TBD |
-| TBD | Week 5 | Lecture 09: Score-Based Generative Models | TBD | TBD |
-| TBD | Week 6 | Lecture 10: Diffusion Models and Diffusion Policy | TBD | TBD |
-| TBD | Week 7 | Lecture 11: Neural ODEs | TBD | TBD |
-| TBD | Week 8 | Lecture 12: Flow Matching for Robot Policy Learning | TBD | TBD |
-| TBD | Week 9 | Lecture 13: Continuous-Time Optimal Control | TBD | TBD |
-| TBD | Week 10 | Lecture 14: Hamilton--Jacobi--Bellman Equations | TBD | TBD |
-| TBD | Week 11 | Lecture 15: Discrete-Time Reinforcement Learning Foundations | TBD | TBD |
-| TBD | Week 12 | Lecture 16: Policy Gradient Fundamentals | TBD | TBD |
-| TBD | Week 13 | Lecture 17: REINFORCE and Variance Reduction | TBD | TBD |
-| TBD | Week 14 | Lecture 18: Actor--Critic and Advanced Policy Optimization | TBD | TBD |
-| TBD | Week 15 | Lecture 19: Reinforcement Learning for Robot Control | TBD | TBD |
-| TBD | Week 16 | Lecture 20: Vision-Language-Action Models, World Models, and Robot Foundation Models | TBD | TBD |
+|  | Week 1 | Lecture 01: Introduction to Robot Learning |  | [Slides](slides/01-welcome.qmd)
+|  | Week 1 | Lecture 02: Dynamic Movement Primitives | [Notes](notes/02-dynamic-movement-primitives.qmd) |  |
+|  | Week 2 | Lecture 03: Learning Stable Dynamical Systems |  |  |
+|  | Week 2 | Lecture 04: Autoencoders |  |  |
+|  | Week 3 | Lecture 05: Variational Autoencoders |  |  |
+|  | Week 3 | Lecture 06: Geometric Autoencoders |  |  |
+|  | Week 4 | Lecture 07: Brownian Motion and Wiener Process |  |  |
+|  | Week 4 | Lecture 08: Stochastic Differential Equations |  |  |
+|  | Week 5 | Lecture 09: Score-Based Generative Models |  |  |
+|  | Week 6 | Lecture 10: Diffusion Models and Diffusion Policy |  |  |
+|  | Week 7 | Lecture 11: Neural ODEs |  |  |
+|  | Week 8 | Lecture 12: Flow Matching for Robot Policy Learning |  |  |
+|  | Week 9 | Lecture 13: Continuous-Time Optimal Control |  |  |
+|  | Week 10 | Lecture 14: Hamilton--Jacobi--Bellman Equations |  |  |
+|  | Week 11 | Lecture 15: Discrete-Time Reinforcement Learning Foundations |  |  |
+|  | Week 12 | Lecture 16: Policy Gradient Fundamentals |  |  |
+|  | Week 13 | Lecture 17: REINFORCE and Variance Reduction |  |  |
+|  | Week 14 | Lecture 18: Actor--Critic and Advanced Policy Optimization |  |  |
+|  | Week 15 | Lecture 19: Reinforcement Learning for Robot Control |  |  |
+|  | Week 16 | Lecture 20: Vision-Language-Action Models, World Models, and Robot Foundation Models |  |  |
 
 Full notes index: [Lecture Notes](notes/index.qmd).

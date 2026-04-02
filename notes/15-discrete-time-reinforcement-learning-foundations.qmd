@@ -2,6 +2,3 @@
 title: "Lecture 15: Discrete-Time Reinforcement Learning Foundations"
 ---
 
-## Overview
-
-TBD.

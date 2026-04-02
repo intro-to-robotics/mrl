@@ -1,7 +1,3 @@
 ---
 title: "Lecture 08: Stochastic Differential Equations"
 ---
-
-## Overview
-
-TBD.

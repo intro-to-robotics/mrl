@@ -2,6 +2,3 @@
 title: "Lecture 14: Hamilton--Jacobi--Bellman Equations"
 ---
 
-## Overview
-
-TBD.

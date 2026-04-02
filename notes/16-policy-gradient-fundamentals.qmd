@@ -2,6 +2,3 @@
 title: "Lecture 16: Policy Gradient Fundamentals"
 ---
 
-## Overview
-
-TBD.

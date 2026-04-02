@@ -2,6 +2,3 @@
 title: "Lecture 13: Continuous-Time Optimal Control"
 ---
 
-## Overview
-
-TBD.

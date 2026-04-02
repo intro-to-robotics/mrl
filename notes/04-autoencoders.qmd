@@ -2,6 +2,3 @@
 title: "Lecture 04: Autoencoders"
 ---
 
-## Overview
-
-TBD.

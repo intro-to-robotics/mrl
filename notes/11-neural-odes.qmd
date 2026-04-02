@@ -2,6 +2,3 @@
 title: "Lecture 11: Neural ODEs"
 ---
 
-## Overview
-
-TBD.

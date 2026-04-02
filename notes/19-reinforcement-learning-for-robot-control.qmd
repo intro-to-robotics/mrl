@@ -2,6 +2,3 @@
 title: "Lecture 19: Reinforcement Learning for Robot Control"
 ---
 
-## Overview
-
-TBD.

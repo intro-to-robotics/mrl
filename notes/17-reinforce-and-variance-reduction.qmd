@@ -1,7 +1,3 @@
 ---
 title: "Lecture 17: REINFORCE and Variance Reduction"
 ---
-
-## Overview
-
-TBD.

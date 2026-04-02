@@ -2,6 +2,3 @@
 title: "Lecture 20: Vision-Language-Action Models, World Models, and Robot Foundation Models"
 ---
 
-## Overview
-
-TBD.

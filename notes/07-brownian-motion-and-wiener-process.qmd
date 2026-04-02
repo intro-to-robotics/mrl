@@ -2,6 +2,3 @@
 title: "Lecture 07: Brownian Motion and Wiener Process"
 ---
 
-## Overview
-
-TBD.

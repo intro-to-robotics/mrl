@@ -1,7 +1,3 @@
 ---
 title: "Lecture 03: Learning Stable Dynamical Systems"
 ---
-
-## Overview
-
-TBD.

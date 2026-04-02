@@ -2,6 +2,3 @@
 title: "Lecture 10: Diffusion Models and Diffusion Policy"
 ---
 
-## Overview
-
-TBD.
